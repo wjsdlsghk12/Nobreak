@@ -1,0 +1,47 @@
+- sebool:
+  - httpd_can_network_connect
+  - httpd_can_network_connect_db
+  - httpd_use_nfs
+
+- nginx_conf:
+    port: 80
+    nginx_ip: 192.168.56.101
+    wordpress1_ip: 192.168.56.102
+    wordpress2_ip: 192.168.56.103
+
+- targetcli:
+  - targetcli /backstores/block create DB_block /dev/sdb
+  - targetcli /backstores/block create DBback_block /dev/sdc
+  - targetcli /iscsi create wwn=iqn.2023-01.kr.co.nobreak:server
+  - targetcli /iscsi create wwn=iqn.2023-01.kr.co.nobreak2:server
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/acls create wwn=iqn.2023-01.kr.co.nobreak:client
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/acls create wwn=iqn.2023-01.kr.co.nobreak2:client
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/luns create /backstores/block/DB_block
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/luns create /backstores/block/DBback_block
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/portals delete 0.0.0.0 ip_port=3260
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/portals create 192.168.56.105
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/portals delete 0.0.0.0 ip_port=3260
+  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/portals create 192.168.56.106
+
+- mysql:
+    password: "Shqmfpdlzm1."
+    masterDB_set:
+      - create user user1@'%' identified by 'Shqmfpdlzm1.' ;
+      - grant replication slave on *.* to 'user1'@'%';
+      - grant all privileges on wordpress.* to user1@'%' with grant option;
+      - flush privileges;
+      - ALTER USER 'user1'@'%' IDENTIFIED WITH mysql_native_password BY 'Shqmfpdlzm1.';
+    master_file_pos:
+      - MYSQL_PWD=Shqmfpdlzm1. mysql -u root -e "show master status;" | awk '{print $1}' | grep bin > file
+      - MYSQL_PWD=Shqmfpdlzm1. mysql -u root -e "show master status;" | awk '{print $2}' | grep ^[0-9] > pos
+
+- iscsi:
+    ip: 192.168.56.107
+    db_iqn: iqn.2023-01.kr.co.nobreak:client
+    dbback_iqn: iqn.2023-01.kr.co.nobreak2:client
+
+- nfs:
+    mount: 192.168.56.104:/srv/exports/wordpress
+    wordpress_url: https://wordpress.org/wordpress-6.1.1.tar.gz
+    wordpress_ver: /var/www/html/wordpress-6.1.1.tar.gz
+    exports: /srv/exports/wordpress 192.168.56.0/24(rw,sync,no_root_squash,no_subtree_check)    

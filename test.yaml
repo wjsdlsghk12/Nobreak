@@ -1,0 +1,387 @@
+- name: python_lib_sebool
+  hosts:
+    - nginx
+    - wordpress
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: python3-libsemanage
+    yum:
+      name: python3-libsemanage
+      state: latest
+  - name: httpd_sebool
+    seboolean:
+      name: "{{ item }}"      
+      state: yes
+      persistent: yes
+    loop: "{{ sebool }}"
+    ignore_errors: yes
+
+
+- name: firewall
+  hosts: all
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: firewall
+    firewalld:
+      port: "{{ firewall }}"
+      permanent: yes
+      state: enabled
+    notify:
+      - firewall_reload
+  handlers:
+  - name: firewall_reload
+    service:
+      name: firewalld
+      state: restarted
+  
+
+- name: nginx_ready
+  hosts: main
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: nginx_install
+    yum:
+      name: nginx
+      state: latest
+  - name: nginx_config
+    template:
+      src: nginx.conf.j2
+      dest: /etc/nginx/nginx.conf
+    notify:
+    - restart_nginx
+    ignore_errors: yes    
+  handlers:
+  - name: restart_nginx
+    service:
+      name: nginx
+      state: restarted
+      enabled: yes
+
+
+
+- name: iscsi_ready
+  hosts: storage
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: targetcli_install
+    yum:
+      name: targetcli
+      state: latest
+  - name: targetcli_start
+    service:
+      name: target
+      state: started
+      enabled: yes
+  - name: targetcli_confgig_first
+    shell: "targetcli ls /backstores/block/DB_block"
+    register: target
+    ignore_errors: yes
+  - name: targetcli_config
+    shell: "{{ item }}"
+    loop: "{{ targetcli }}"
+    when: target.failed
+    ignore_errors: yes
+
+
+
+- name: db_iscsi
+  hosts: database
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: iscsi_install
+    yum:
+      name: iscsi-initiator-utils
+      state: latest
+    with_items:
+      - iscsi-initiator-utils
+      - lsscsi
+  - name: iscsid_start
+    service:
+      name: iscsid
+      state: started
+      enabled: true
+  - name: iscsi_start
+    service:
+      name: iscsi
+      state: started
+      enabled: true
+  - name: iqn_config
+    template:
+      src: "initiatorname.iscsi{{ iscsi_no }}.j2"
+      dest: /etc/iscsi/initiatorname.iscsi
+  - name: iscsi_discover
+    become: true
+    open_iscsi:
+      show_nodes: true
+      discover: true
+      ip: "{{ iscsi.ip }}"
+  - name: iscsi_conn
+    open_iscsi:
+      login: true
+      target: "{{ iscsi_server }}"
+  - name: partition
+    parted:
+      device: /dev/sdb
+      number: 1
+      state: present
+  - name: filesystem
+    filesystem:
+      fstype: xfs
+      dev: /dev/sdb1
+  - name: mount
+    mount:
+      src: /dev/sdb1
+      path: /var/lib/mysql
+      state: mounted
+      fstype: xfs
+      opts: _netdev
+
+
+
+- name: db_install
+  hosts: database
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: repo_install
+    yum:
+      name: https://dev.mysql.com/get/mysql80-community-release-el7-7.noarch.rpm
+      state: present
+    ignore_errors: yes
+  - name: mysql_install
+    yum:
+      name: mysql-server
+      state: latest
+  - name: PyMySQL
+    pip:
+      name: PyMySQL
+  - name: mysql_start
+    service:
+      name: mysqld
+      state: started
+      enabled: yes
+  - name: find_pwd
+    shell: "sudo grep 'temporary password' /var/log/mysqld.log | awk '{print $13}'"
+    register: temporary_password
+  - name: password_update
+    mysql_query:
+      login_user: root
+      login_password: "{{ temporary_password.stdout }}"
+      query: ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ mysql.password }}';
+    when: temporary_password!=mysql.password
+    ignore_errors: yes
+
+
+
+- name: db_config
+  hosts: database
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: Make_database
+    mysql_db:
+      login_user: root
+      login_password: Shqmfpdlzm1.
+      name: wordpress
+      encoding: utf8mb4
+    ignore_errors: yes
+  - name: Master_auth
+    mysql_user:
+      login_user: root
+      login_password: Shqmfpdlzm1.
+      name: user1
+      host: '%'
+      password: Shqmfpdlzm1.
+      priv: 
+        'wordpress.*': 'ALL,GRANT'
+        '*.*': 'REPLICATION SLAVE'
+      state: present
+  - name: mysql_privileges
+    mysql_user:
+      login_user: root
+      login_password: Shqmfpdlzm1.
+      name: user1
+      plugin: mysql_native_password
+      state: present
+
+
+- name: master_db
+  hosts: db
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:  
+  - name: mysql_cnf
+    template:
+      src: mysql-server.cnf.j2
+      dest: /etc/mysql-server.cnf
+    notify:
+      - mysql_restart
+  - name: get_master_log_pos
+    mysql_replication:
+      mode: getprimary
+      login_user: root
+      login_password: Shqmfpdlzm1.
+    register: master_status
+  - name: DB_file_Pos
+    set_fact:
+      master_file: "{{ master_status.File }}"
+      master_position: "{{ master_status.Position }}"
+  handlers:
+  - name: mysql_restart
+    service: 
+      name: mysqld
+      state: restarted
+
+
+
+- name: Slave_db
+  hosts: dbback
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: mysql_cnf
+    template:
+      src: mysql-server.cnf2.j2
+      dest: /etc/mysql-server.cnf
+    notify:
+      - mysql_restart
+  - name: stop_slave
+    mysql_replication:
+      mode: stopreplica
+      login_password: Shqmfpdlzm1.
+  - name: slave_persist
+    mysql_replication:
+      mode: changeprimary
+      login_password: Shqmfpdlzm1.
+      primary_host: 192.168.56.105
+      primary_user: user1
+      primary_password: Shqmfpdlzm1.
+      primary_log_file: "{{ hostvars['db']['master_file'] }}"
+      primary_log_pos: "{{ hostvars['db']['master_position'] }}"
+    notify:
+    - slave_start
+  handlers:
+  - name: mysql_restart
+    service: 
+      name: mysqld
+      state: restarted
+  - name: slave_start
+    mysql_query:
+      login_user: root
+      login_password: Shqmfpdlzm1.
+      query: start slave;
+
+
+
+- name: nfs
+  hosts: nfs
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: nfs_install
+    yum:
+      name: nfs-utils
+      state: latest
+  - name: mkdir
+    file:
+      path: /srv/exports/wordpress
+      state: directory
+  - name: export_edit
+    template:
+      src: exports.j2
+      dest: /etc/exports
+    notify:
+    - exportfs
+  handlers:
+  - name: exportfs
+    service:
+      name: nfs-server
+      state: restarted
+      enalbed: true
+
+
+- name: wordpress
+  hosts: wordpress
+  vars_files:
+    - vars.yaml
+  become: true
+  remote_user: vagrant
+  tasks:
+  - name: httpd_install
+    yum:
+      name: "{{ item }}"
+      state: latest
+    with_items:
+      - httpd
+      - php
+      - php-mysqlnd
+      - nfs-utils
+  - name: start_httpd
+    service:
+      name: httpd
+      state: started
+      enabled: yes 
+  - name: mount
+    mount:
+      src: "{{ nfs.mount }}"
+      path: /var/www/html
+      state: mounted
+      fstype: nfs
+  - name: apache_config
+    template:
+      src: httpd.conf.j2
+      dest: /etc/httpd/conf/httpd.conf
+    notify:
+    - apache_restart
+  handlers:
+  - name: apache_restart
+    service:
+      name: httpd
+      state: restarted
+
+
+- name: wordpress_config
+  hosts: wordpress1
+  vars_files:
+    - vars.yaml
+  become: true
+  tasks:
+  - name: download hive file
+    get_url:
+      url: "{{ nfs.wordpress_url }}"
+      dest: /var/www/html
+  - name: unarchive java file
+    unarchive:
+      src: "{{ nfs.wordpress_ver }}"
+      dest: /var/www/html
+      remote_src: True
+  - name: wp_config
+    template:
+      src: wp-config.php.j2
+      dest: /var/www/html/wordpress/wp-config.php
+  - name: wordpress_chown
+    file:
+      path: /var/www/html/wordpress
+      owner: apache
+      group: apache
