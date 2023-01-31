@@ -118,6 +118,14 @@
       name: iscsi
       state: started
       enabled: true
+  - name: rc_local_config
+    template:
+      src: "rc_local_config.j2"
+      dest: /etc/rc.d/rc.local
+  - name: rc_local_chmod
+    file:
+      path: /etc/rc.d/rc.local
+      mode: +x
   - name: iqn_config
     template:
       src: "initiatorname.iscsi{{ iscsi_no }}.j2"
@@ -232,7 +240,7 @@
   - name: mysql_cnf
     template:
       src: mysql-server.cnf.j2
-      dest: /etc/mysql-server.cnf
+      dest: /etc/my.cnf.d/mysql-server.cnf
     notify:
       - mysql_restart
   - name: get_master_log_pos
@@ -261,7 +269,7 @@
   - name: mysql_cnf
     template:
       src: mysql-server.cnf2.j2
-      dest: /etc/mysql-server.cnf
+      dest: /etc/my.cnf.d/mysql-server.cnf
     notify:
       - mysql_restart
   - name: stop_slave
