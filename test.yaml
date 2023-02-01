@@ -108,16 +108,6 @@
     with_items:
       - iscsi-initiator-utils
       - lsscsi
-  - name: iscsid_start
-    service:
-      name: iscsid
-      state: started
-      enabled: true
-  - name: iscsi_start
-    service:
-      name: iscsi
-      state: started
-      enabled: true
   - name: rc_local_config
     template:
       src: "rc_local_config.j2"
@@ -130,6 +120,16 @@
     template:
       src: "initiatorname.iscsi{{ iscsi_no }}.j2"
       dest: /etc/iscsi/initiatorname.iscsi
+  - name: iscsid_start
+    service:
+      name: iscsid
+      state: started
+      enabled: true
+  - name: iscsi_start
+    service:
+      name: iscsi
+      state: started
+      enabled: true
   - name: iscsi_discover
     become: true
     open_iscsi:
