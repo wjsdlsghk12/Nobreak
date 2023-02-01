@@ -311,6 +311,11 @@
     yum:
       name: nfs-utils
       state: latest
+  - name: nfs_start
+    service:
+      name: nfs-server
+      state: started
+      enabled: true
   - name: mkdir
     file:
       path: /srv/exports/wordpress
@@ -326,7 +331,7 @@
     service:
       name: nfs-server
       state: restarted
-      enalbed: true
+      enabled: true
 
 
 - name: wordpress

@@ -18,10 +18,6 @@
   - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/acls create wwn=iqn.2023-01.kr.co.nobreak2:client
   - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/luns create /backstores/block/DB_block
   - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/luns create /backstores/block/DBback_block
-  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/portals delete 0.0.0.0 ip_port=3260
-  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak:server/tpg1/portals create 192.168.56.105
-  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/portals delete 0.0.0.0 ip_port=3260
-  - targetcli /iscsi/iqn.2023-01.kr.co.nobreak2:server/tpg1/portals create 192.168.56.106
 
 - mysql:
     password: "Shqmfpdlzm1."
