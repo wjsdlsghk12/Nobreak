@@ -243,21 +243,22 @@
       dest: /etc/my.cnf.d/mysql-server.cnf
     notify:
       - mysql_restart
+      - DB_file_Pos
   - name: get_master_log_pos
     mysql_replication:
       mode: getprimary
       login_user: root
       login_password: Shqmfpdlzm1.
     register: master_status
-  - name: DB_file_Pos
-    set_fact:
-      master_file: "{{ master_status.File }}"
-      master_position: "{{ master_status.Position }}"
   handlers:
   - name: mysql_restart
     service: 
       name: mysqld
       state: restarted
+  - name: DB_file_Pos
+    set_fact:
+      master_file: "{{ master_status.File }}"
+      master_position: "{{ master_status.Position }}"
 
 
 
