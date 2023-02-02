@@ -1,4 +1,4 @@
-- name: python_lib_sebool
+- name: python3_libsemanage_install_sebool_config
   hosts:
     - nginx
     - wordpress
@@ -7,20 +7,19 @@
   become: true
   remote_user: vagrant
   tasks:
-  - name: python3-libsemanage
+  - name: python3-libsemanage_install
     yum:
       name: python3-libsemanage
       state: latest
-  - name: httpd_sebool
+  - name: sebool_config
     seboolean:
       name: "{{ item }}"      
       state: yes
       persistent: yes
     loop: "{{ sebool }}"
-    ignore_errors: yes
 
 
-- name: firewall
+- name: firewall_config
   hosts: all
   become: true
   remote_user: vagrant
@@ -30,16 +29,10 @@
       port: "{{ firewall }}"
       permanent: yes
       state: enabled
-    notify:
-      - firewall_reload
-  handlers:
-  - name: firewall_reload
-    service:
-      name: firewalld
-      state: restarted
-  
+      immediate: true
 
-- name: nginx_ready
+
+- name: nginx_install_config
   hosts: main
   vars_files:
     - vars.yaml
@@ -55,18 +48,16 @@
       src: nginx.conf.j2
       dest: /etc/nginx/nginx.conf
     notify:
-    - restart_nginx
-    ignore_errors: yes    
+    - start_nginx   
   handlers:
-  - name: restart_nginx
+  - name: start_nginx
     service:
       name: nginx
-      state: restarted
+      state: started
       enabled: yes
 
 
-
-- name: iscsi_ready
+- name: iscsi_server_config
   hosts: storage
   vars_files:
     - vars.yaml
@@ -90,11 +81,9 @@
     shell: "{{ item }}"
     loop: "{{ targetcli }}"
     when: target.failed
-    ignore_errors: yes
 
 
-
-- name: db_iscsi
+- name: iscsi_client_config
   hosts: database
   vars_files:
     - vars.yaml
@@ -103,19 +92,11 @@
   tasks:
   - name: iscsi_install
     yum:
-      name: iscsi-initiator-utils
+      name: "{{ item }}"
       state: latest
     with_items:
       - iscsi-initiator-utils
       - lsscsi
-  - name: rc_local_config
-    template:
-      src: "rc_local_config.j2"
-      dest: /etc/rc.d/rc.local
-  - name: rc_local_chmod
-    file:
-      path: /etc/rc.d/rc.local
-      mode: +x
   - name: iqn_config
     template:
       src: "initiatorname.iscsi{{ iscsi_no }}.j2"
@@ -139,7 +120,7 @@
   - name: iscsi_conn
     open_iscsi:
       login: true
-      target: "{{ iscsi_server }}"
+      target: "{{ iscsi_server }}"      
   - name: partition
     parted:
       device: /dev/sdb
@@ -156,26 +137,28 @@
       state: mounted
       fstype: xfs
       opts: _netdev
+  - name: rc_local_config##----1.
+    template:
+      src: "rc_local_config.j2"
+      dest: /etc/rc.d/rc.local
+  - name: rc_local_chmod##----2.
+    file:
+      path: /etc/rc.d/rc.local
+      mode: +x
 
 
-
-- name: db_install
+- name: DB_nodes_config
   hosts: database
   vars_files:
     - vars.yaml
   become: true
   remote_user: vagrant
   tasks:
-  - name: repo_install
-    yum:
-      name: https://dev.mysql.com/get/mysql80-community-release-el7-7.noarch.rpm
-      state: present
-    ignore_errors: yes
   - name: mysql_install
     yum:
       name: mysql-server
       state: latest
-  - name: PyMySQL
+  - name: PyMySQL_install
     pip:
       name: PyMySQL
   - name: mysql_start
@@ -195,8 +178,7 @@
     ignore_errors: yes
 
 
-
-- name: db_config
+- name: DB_config
   hosts: database
   vars_files:
     - vars.yaml
@@ -209,8 +191,7 @@
       login_password: Shqmfpdlzm1.
       name: wordpress
       encoding: utf8mb4
-    ignore_errors: yes
-  - name: Master_auth
+  - name: Slave_user_auth
     mysql_user:
       login_user: root
       login_password: Shqmfpdlzm1.
@@ -230,7 +211,7 @@
       state: present
 
 
-- name: master_db
+- name: master_DB_config
   hosts: db
   vars_files:
     - vars.yaml
@@ -243,26 +224,25 @@
       dest: /etc/my.cnf.d/mysql-server.cnf
     notify:
       - mysql_restart
-      - DB_file_Pos
-  - name: get_master_log_pos
-    mysql_replication:
-      mode: getprimary
-      login_user: root
-      login_password: Shqmfpdlzm1.
-    register: master_status
+      - DB_file_Pos_record
   handlers:
   - name: mysql_restart
     service: 
       name: mysqld
       state: restarted
-  - name: DB_file_Pos
+  - name: get_master_log_file_pos
+    mysql_replication:
+      mode: getprimary
+      login_user: root
+      login_password: Shqmfpdlzm1.
+    register: master_status
+  - name: DB_file_Pos_record
     set_fact:
       master_file: "{{ master_status.File }}"
       master_position: "{{ master_status.Position }}"
 
 
-
-- name: Slave_db
+- name: Slave_db_config
   hosts: dbback
   become: true
   remote_user: vagrant
@@ -300,8 +280,7 @@
       query: start slave;
 
 
-
-- name: nfs
+- name: nfs_server_config
   hosts: nfs
   vars_files:
     - vars.yaml
@@ -317,7 +296,7 @@
       name: nfs-server
       state: started
       enabled: true
-  - name: mkdir
+  - name: make_share_directory
     file:
       path: /srv/exports/wordpress
       state: directory
@@ -335,7 +314,7 @@
       enabled: true
 
 
-- name: wordpress
+- name: nfs_client_config
   hosts: wordpress
   vars_files:
     - vars.yaml
