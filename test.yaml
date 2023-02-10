@@ -327,9 +327,13 @@
       state: latest
     with_items:
       - httpd
-      - php
-      - php-mysqlnd
       - nfs-utils
+  - name: php install
+    dnf:
+      name: "{{ item }}"
+    with_items:
+      - @php:7.4
+      - php-mysqlnd
   - name: start_httpd
     service:
       name: httpd
