@@ -224,6 +224,7 @@
       dest: /etc/my.cnf.d/mysql-server.cnf
     notify:
       - mysql_restart
+      - get_master_log_file_pos
       - DB_file_Pos_record
   handlers:
   - name: mysql_restart
@@ -332,7 +333,7 @@
     dnf:
       name: "{{ item }}"
     with_items:
-      - @php:7.4
+      - '@php:7.4'
       - php-mysqlnd
   - name: start_httpd
     service:
